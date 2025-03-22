@@ -1,0 +1,4 @@
+flake8
+stripe
+paypalrestsdk
+python-dotenv
