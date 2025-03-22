@@ -2,4 +2,6 @@ flake8
 stripe
 paypalrestsdk
 python-dotenv
-sqlite3
+qiskit
+qiskit-optimization
+qiskit-algorithms
