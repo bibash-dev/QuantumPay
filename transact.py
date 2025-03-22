@@ -4,6 +4,9 @@ import config
 import logging
 import random
 import sqlite3
+from qiskit_optimization import QuadraticProgram
+from qiskit_algorithms import NumPyMinimumEigensolver
+from qiskit_optimization.algorithms import MinimumEigenOptimizer
 
 logging.basicConfig(level=logging.INFO, filename="quantum_pay.log")
 logger = logging.getLogger(__name__)
@@ -26,8 +29,7 @@ def save_to_db(gateway, fee, latency):
         (gateway, fee, latency),
     )
     conn.commit()
-    logger.info("Saved to DB: %s, Fee=$%.2f, Latency=%.1fms",
-                gateway, fee, latency)
+    logger.info("Saved to DB: %s, Fee=$%.2f, Latency=%.1fms", gateway, fee, latency)
     conn.close()
 
 
@@ -87,8 +89,36 @@ def paypal_charge():
         raise
 
 
+def route_transaction(stripe_data, paypal_data):
+    qp = QuadraticProgram()
+    qp.binary_var("s")  # 1 if Stripe, 0 if PayPal
+    qp.binary_var("p")  # 1 if PayPal, 0 if Stripe
+    qp.minimize(
+        linear={
+            "s": stripe_data["fee"] + 0.001 * stripe_data["latency"],
+            "p": paypal_data["fee"] + 0.001 * paypal_data["latency"],
+        }
+    )
+    qp.linear_constraint({"s": 1, "p": 1}, "==", 1)  # Only one gateway
+    optimizer = MinimumEigenOptimizer(NumPyMinimumEigensolver())
+    result = optimizer.solve(qp)
+    winner = "Stripe" if result.x[0] == 1 else "PayPal"
+    logger.info(
+        "Routing decision: %s (Stripe: Fee=$%.2f, Lat=%.1fms; PayPal: Fee=$%.2f, Lat=%.1fms)",
+        winner,
+        stripe_data["fee"],
+        stripe_data["latency"],
+        paypal_data["fee"],
+        paypal_data["latency"],
+    )
+    return winner
+
+
 if __name__ == "__main__":
     stripe_result = stripe_charge()
     paypal_result = paypal_charge()
-    print(f"Stripe: Fee=, Latency={stripe_result['latency']:.1f}ms")
-    print(f"PayPal: Fee=, Latency={paypal_result['latency']:.1f}ms")
+    winner = route_transaction(stripe_result, paypal_result)
+    print(
+        f'Winner: {winner} (Stripe: Fee=${stripe_result["fee"]:.2f}, Lat={stripe_result["latency"]:.1f}ms; '
+        f'PayPal: Fee=${paypal_result["fee"]:.2f}, Lat={paypal_result["latency"]:.1f}ms)'
+    )
