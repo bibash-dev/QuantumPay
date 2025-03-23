@@ -22,4 +22,3 @@ class Transaction(Base):
     fee = Column(Float, nullable=False)
     latency = Column(Float, nullable=False)
     timestamp = Column(DateTime(timezone=False), server_default=func.now())
-
