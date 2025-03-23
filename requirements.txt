@@ -7,7 +7,9 @@ qiskit
 qiskit-optimization
 qiskit-algorithms
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 sqlalchemy[asyncio]
 asyncpg
 pydantic
+python-multipart
