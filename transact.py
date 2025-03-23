@@ -1,10 +1,11 @@
 import stripe
 import paypalrestsdk
+from square.client import Client
 import config
 import logging
-import random
 import time
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from qiskit_optimization import QuadraticProgram
 from qiskit_algorithms import NumPyMinimumEigensolver
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
@@ -19,6 +20,10 @@ paypalrestsdk.configure(
         "client_id": config.PAYPAL_CLIENT_ID,
         "client_secret": config.PAYPAL_SECRET,
     }
+)
+square_client = Client(
+    access_token=config.SQUARE_ACCESS_TOKEN,
+    environment='sandbox'  # Use 'production' for live transactions
 )
 
 
@@ -52,7 +57,7 @@ def stripe_charge():
             latency,
         )
         save_to_db("Stripe", fee, latency)
-        return {"fee": fee, "latency": latency}
+        return {"gateway": "Stripe", "fee": fee, "latency": latency}
     except stripe.error.StripeError as e:
         logger.error("Stripe error: %s", str(e))
         raise
@@ -86,59 +91,93 @@ def paypal_charge():
             latency,
         )
         save_to_db("PayPal", fee, latency)
-        return {"fee": fee, "latency": latency}
+        return {"gateway": "PayPal", "fee": fee, "latency": latency}
     else:
         logger.error("PayPal error: %s", payment.error)
         raise
 
 
-def route_transaction(stripe_data, paypal_data):
+def square_charge():
+    try:
+        start = time.time()
+        result = square_client.payments.create_payment(
+            body={
+                "source_id": "cnon:card-nonce-ok",  # Test nonce from Square
+                "amount_money": {"amount": 1000, "currency": "USD"},
+                "idempotency_key": str(time.time()),
+            }
+        )
+        latency = (time.time() - start) * 1000
+        if result.is_success():
+            fee = (1000 * 0.026 + 10) / 100  # 2.6% + $0.10 (Square online rate)
+            logger.info(
+                "Square payment succeeded: ID=%s, Fee=$%.2f, Latency=%.1fms",
+                result.body["payment"]["id"],
+                fee,
+                latency,
+            )
+            save_to_db("Square", fee, latency)
+            return {"gateway": "Square", "fee": fee, "latency": latency}
+        else:
+            logger.error("Square error: %s", result.errors)
+            raise Exception(result.errors)
+    except Exception as e:
+        logger.error("Square error: %s", str(e))
+        raise
+
+
+def route_transaction(results):
     qp = QuadraticProgram()
-    qp.binary_var("s")  # 1 if Stripe, 0 if PayPal
-    qp.binary_var("p")  # 1 if PayPal, 0 if Stripe
-    qp.minimize(
-        linear={
-            "s": stripe_data["fee"] + 0.001 * stripe_data["latency"],
-            "p": paypal_data["fee"] + 0.001 * paypal_data["latency"],
-        }
-    )
-    qp.linear_constraint({"s": 1, "p": 1}, "==", 1)  # Only one gateway
+
+    # Create binary variables with unique names
+    for r in results:
+        qp.binary_var(r["gateway"].lower())  # Use full gateway name as variable name
+
+    # Define costs for each gateway
+    costs = {r["gateway"].lower(): r["fee"] + 0.001 * r["latency"] for r in results}
+    qp.minimize(linear=costs)
+
+    # Add constraint: only one gateway can be selected
+    qp.linear_constraint({r["gateway"].lower(): 1 for r in results}, "==", 1)
+
+    # Solve the optimization problem
     optimizer = MinimumEigenOptimizer(NumPyMinimumEigensolver())
     result = optimizer.solve(qp)
-    winner = "Stripe" if result.x[0] == 1 else "PayPal"
-    savings = max(stripe_data["fee"], paypal_data["fee"]) - min(
-        stripe_data["fee"], paypal_data["fee"]
+
+    # Determine the winning gateway
+    winner_idx = [i for i, v in enumerate(result.x) if v == 1][0]
+    winner = results[winner_idx]["gateway"]
+
+    # Calculate savings
+    savings = max(r["fee"] for r in results) - min(r["fee"] for r in results)
+
+    # Log the routing decision
+    log_msg = (
+            "Routing decision: %s ("
+            + ", ".join(
+        [
+            "%s: Fee=$%.2f, Lat=%.1fms" % (r["gateway"], r["fee"], r["latency"])
+            for r in results
+        ]
     )
-    logger.info(
-        "Routing decision: %s (Stripe: Fee=$%.2f, Lat=%.1fms; PayPal: Fee=$%.2f, Lat=%.1fms), Savings=$%.2f",
-        winner,
-        stripe_data["fee"],
-        stripe_data["latency"],
-        paypal_data["fee"],
-        paypal_data["latency"],
-        savings,
+            + "), Savings=$%.2f"
     )
+    logger.info(log_msg, winner, savings)
+
     return winner, savings
 
 
-if __name__ == "__main__":
-    stripe_wins = 0
-    paypal_wins = 0
+if __name__ == '__main__':
+    gateways = [stripe_charge, paypal_charge, square_charge]
+    wins = {'Stripe': 0, 'PayPal': 0, 'Square': 0}
     total_savings = 0.0
     for i in range(5):
-        print(f"\nTransaction #{i+1}:")
-        stripe_result = stripe_charge()
-        paypal_result = paypal_charge()
-        winner, savings = route_transaction(stripe_result, paypal_result)
-        if winner == "Stripe":
-            stripe_wins += 1
-        else:
-            paypal_wins += 1
+        print(f'\nTransaction #{i+1}:')
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_gateway = {executor.submit(g): g.__name__ for g in gateways}
+            results = [future.result() for future in future_to_gateway]
+        winner, savings = route_transaction(results)
+        wins[winner] += 1
         total_savings += savings
-        print(
-            f'Winner: {winner} (Stripe: Fee=${stripe_result["fee"]:.2f}, Lat={stripe_result["latency"]:.1f}ms; '
-            f'PayPal: Fee=${paypal_result["fee"]:.2f}, Lat={paypal_result["latency"]:.1f}ms)'
-        )
-    print(
-        f"\nSummary: Stripe Wins={stripe_wins}, PayPal Wins={paypal_wins}, Total Savings=${total_savings:.2f}"
-    )
+        print(f'Winner: {winner} (' + ', '.join([f'{r["gateway"]}: Fee=${r["fee"]:.2f}, Lat={r["latency"]:.1f}ms' for r in results]) + ')')
+    print(f'\nSummary: Stripe Wins={wins["Stripe"]}, PayPal Wins={wins["PayPal"]}, Square Wins={wins["Square"]}, Total Savings=${total_savings:.2f}')
