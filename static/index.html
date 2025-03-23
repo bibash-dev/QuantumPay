@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <title>QuantumPay Dashboard</title>
+    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        canvas { max-width: 800px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>QuantumPay Payment Race Dashboard</h1>
+    <canvas id='winsChart'></canvas>
+    <canvas id='savingsChart'></canvas>
+    <script>
+        let winsData = { Stripe: 0, PayPal: 0, Square: 0 };
+        let totalSavings = 0;
+        let savingsData = [];
+
+        const winsChart = new Chart(document.getElementById('winsChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Stripe', 'PayPal', 'Square'],
+                datasets: [{
+                    label: 'Wins',
+                    data: [0, 0, 0],
+                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56']
+                }]
+            },
+            options: {
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Wins' } } },
+                plugins: { title: { display: true, text: 'Gateway Wins' } }
+            }
+        });
+
+        const savingsChart = new Chart(document.getElementById('savingsChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Total Savings ($)',
+                    data: [],
+                    borderColor: '#4BC0C0',
+                    fill: false
+                }]
+            },
+            options: {
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Savings ($)' } } },
+                plugins: { title: { display: true, text: 'Cumulative Savings Over Time' } }
+            }
+        });
+
+        // Fetch initial data
+        async function loadInitialData() {
+            try {
+                const response = await fetch('http://localhost:8000/dashboard-data');
+                const data = await response.json();
+                console.log('Initial data:', data);
+
+                winsData = {
+                    Stripe: data.summary['Stripe Wins'],
+                    PayPal: data.summary['PayPal Wins'],
+                    Square: data.summary['Square Wins']
+                };
+                winsChart.data.datasets[0].data = [winsData.Stripe, winsData.PayPal, winsData.Square];
+                winsChart.update();
+
+                totalSavings = 0;
+                savingsData = [];
+                data.transactions.forEach(tx => {
+                    totalSavings += tx.savings;
+                    savingsData.push(totalSavings);
+                    savingsChart.data.labels.push(`T${tx.transaction}`);
+                });
+                savingsChart.data.datasets[0].data = savingsData;
+                savingsChart.update();
+            } catch (err) {
+                console.error('Error loading initial data:', err);
+            }
+        }
+
+        // WebSocket for live updates
+        const ws = new WebSocket('ws://localhost:8000/ws');
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket Received:', data);
+
+                // Handle reset signal
+                if (data.reset) {
+                    winsData = { Stripe: 0, PayPal: 0, Square: 0 };
+                    totalSavings = 0;
+                    savingsData = [];
+                    savingsChart.data.labels = [];
+                    winsChart.data.datasets[0].data = [0, 0, 0];
+                    savingsChart.data.datasets[0].data = [];
+                    winsChart.update();
+                    savingsChart.update();
+                    console.log('Charts reset for new charge session');
+                    return;
+                }
+
+                if (data.winner && data.savings !== undefined && data.transaction !== undefined) {
+                    const winner = data.winner;
+                    if (winsData.hasOwnProperty(winner)) {
+                        winsData[winner]++;
+                        winsChart.data.datasets[0].data = [winsData.Stripe, winsData.PayPal, winsData.Square];
+                        winsChart.update();
+                    } else {
+                        console.error("Unknown winner:", winner);
+                    }
+
+                    totalSavings += data.savings;
+                    savingsData.push(totalSavings);
+                    savingsChart.data.labels.push(`T${data.transaction}`);
+                    savingsChart.data.datasets[0].data = savingsData;
+                    savingsChart.update();
+
+                    console.log('Transaction Details:', data.details);
+                } else {
+                    console.error("Received malformed data:", data);
+                }
+            } catch (err) {
+                console.error("Error parsing WebSocket message:", err);
+            }
+        };
+
+        ws.onopen = () => {
+            console.log('Connected to WebSocket');
+            loadInitialData();
+        };
+        ws.onerror = (err) => console.error('WebSocket error:', err);
+        ws.onclose = () => console.log('WebSocket closed');
+    </script>
+</body>
+</html>
