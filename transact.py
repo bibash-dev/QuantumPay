@@ -2,14 +2,13 @@ import stripe
 import paypalrestsdk
 from square.client import Client
 from . import config
-from . import db_setup
 import logging
 import time
-import sqlite3
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
 from qiskit_optimization import QuadraticProgram
 from qiskit_algorithms import NumPyMinimumEigensolver
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
+from quantum_pay.schemas import TransactionCreate
 
 logging.basicConfig(level=logging.INFO, filename="quantum_pay.log")
 logger = logging.getLogger(__name__)
@@ -28,19 +27,7 @@ square_client = Client(
 )
 
 
-def save_to_db(gateway, fee, latency):
-    conn = sqlite3.connect("quantum_pay.db")
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO transactions (gateway, fee, latency) VALUES (?, ?, ?)",
-        (gateway, fee, latency),
-    )
-    conn.commit()
-    logger.info("Saved to DB: %s, Fee=$%.2f, Latency=%.1fms", gateway, fee, latency)
-    conn.close()
-
-
-def stripe_charge():
+async def stripe_charge():
     try:
         start = time.time()
         charge = stripe.Charge.create(
@@ -57,14 +44,13 @@ def stripe_charge():
             fee,
             latency,
         )
-        save_to_db("Stripe", fee, latency)
-        return {"gateway": "Stripe", "fee": fee, "latency": latency}
+        return TransactionCreate(gateway="Stripe", fee=fee, latency=latency)
     except stripe.error.StripeError as e:
         logger.error("Stripe error: %s", str(e))
         raise
 
 
-def paypal_charge():
+async def paypal_charge():
     payment = paypalrestsdk.Payment(
         {
             "intent": "sale",
@@ -91,14 +77,13 @@ def paypal_charge():
             fee,
             latency,
         )
-        save_to_db("PayPal", fee, latency)
-        return {"gateway": "PayPal", "fee": fee, "latency": latency}
+        return TransactionCreate(gateway="PayPal", fee=fee, latency=latency)
     else:
         logger.error("PayPal error: %s", payment.error)
         raise
 
 
-def square_charge():
+async def square_charge():
     try:
         start = time.time()
         result = square_client.payments.create_payment(
@@ -117,8 +102,7 @@ def square_charge():
                 fee,
                 latency,
             )
-            save_to_db("Square", fee, latency)
-            return {"gateway": "Square", "fee": fee, "latency": latency}
+            return TransactionCreate(gateway="Square", fee=fee, latency=latency)
         else:
             logger.error("Square error: %s", result.errors)
             raise Exception(result.errors)
@@ -129,40 +113,37 @@ def square_charge():
 
 def route_transaction(results):
     qp = QuadraticProgram()
+    # Define unique variables once
+    unique_gateways = {
+        r.gateway.lower() for r in results
+    }  # 'stripe', 'paypal', 'square'
+    for gateway in unique_gateways:
+        qp.binary_var(gateway)
 
-    # Create binary variables with unique names
-    for r in results:
-        qp.binary_var(r["gateway"].lower())  # Use full gateway name as variable name
-
-    # Define costs for each gateway
-    costs = {r["gateway"].lower(): r["fee"] + 0.001 * r["latency"] for r in results}
+    # Define costs
+    costs = {r.gateway.lower(): r.fee + 0.001 * r.latency for r in results}
     qp.minimize(linear=costs)
 
-    # Add constraint: only one gateway can be selected
-    qp.linear_constraint({r["gateway"].lower(): 1 for r in results}, "==", 1)
+    # Add constraint: one gateway selected
+    qp.linear_constraint({r.gateway.lower(): 1 for r in results}, "==", 1)
 
-    # Solve the optimization problem
     optimizer = MinimumEigenOptimizer(NumPyMinimumEigensolver())
     result = optimizer.solve(qp)
 
-    # Determine the winning gateway
     winner_idx = [i for i, v in enumerate(result.x) if v == 1][0]
-    winner = results[winner_idx]["gateway"]
+    winner = list(unique_gateways)[winner_idx]  # Map back to name
+    savings = max(r.fee for r in results) - min(r.fee for r in results)
 
-    # Calculate savings
-    savings = max(r["fee"] for r in results) - min(r["fee"] for r in results)
-
-    # Log the routing decision
     log_msg = (
         "Routing decision: %s ("
         + ", ".join(
             [
-                "%s: Fee=$%.2f, Lat=%.1fms" % (r["gateway"], r["fee"], r["latency"])
+                "%s: Fee=$%.2f, Lat=%.1fms" % (r.gateway, r.fee, r.latency)
                 for r in results
             ]
         )
         + "), Savings=$%.2f"
     )
-    logger.info(log_msg, winner, savings)
+    logger.info(log_msg, winner.capitalize(), savings)
 
     return winner, savings, results
