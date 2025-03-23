@@ -6,3 +6,5 @@ python-dotenv
 qiskit
 qiskit-optimization
 qiskit-algorithms
+fastapi
+uvicorn

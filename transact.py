@@ -1,7 +1,8 @@
 import stripe
 import paypalrestsdk
 from square.client import Client
-import config
+from . import config
+from . import db_setup
 import logging
 import time
 import sqlite3
@@ -23,7 +24,7 @@ paypalrestsdk.configure(
 )
 square_client = Client(
     access_token=config.SQUARE_ACCESS_TOKEN,
-    environment='sandbox'  # Use 'production' for live transactions
+    environment="sandbox",  # Use 'production' for live transactions
 )
 
 
@@ -153,31 +154,15 @@ def route_transaction(results):
 
     # Log the routing decision
     log_msg = (
-            "Routing decision: %s ("
-            + ", ".join(
-        [
-            "%s: Fee=$%.2f, Lat=%.1fms" % (r["gateway"], r["fee"], r["latency"])
-            for r in results
-        ]
-    )
-            + "), Savings=$%.2f"
+        "Routing decision: %s ("
+        + ", ".join(
+            [
+                "%s: Fee=$%.2f, Lat=%.1fms" % (r["gateway"], r["fee"], r["latency"])
+                for r in results
+            ]
+        )
+        + "), Savings=$%.2f"
     )
     logger.info(log_msg, winner, savings)
 
-    return winner, savings
-
-
-if __name__ == '__main__':
-    gateways = [stripe_charge, paypal_charge, square_charge]
-    wins = {'Stripe': 0, 'PayPal': 0, 'Square': 0}
-    total_savings = 0.0
-    for i in range(5):
-        print(f'\nTransaction #{i+1}:')
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            future_to_gateway = {executor.submit(g): g.__name__ for g in gateways}
-            results = [future.result() for future in future_to_gateway]
-        winner, savings = route_transaction(results)
-        wins[winner] += 1
-        total_savings += savings
-        print(f'Winner: {winner} (' + ', '.join([f'{r["gateway"]}: Fee=${r["fee"]:.2f}, Lat={r["latency"]:.1f}ms' for r in results]) + ')')
-    print(f'\nSummary: Stripe Wins={wins["Stripe"]}, PayPal Wins={wins["PayPal"]}, Square Wins={wins["Square"]}, Total Savings=${total_savings:.2f}')
+    return winner, savings, results
