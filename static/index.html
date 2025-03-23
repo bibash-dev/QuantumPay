@@ -1,36 +1,666 @@
 <!DOCTYPE html>
-<html lang='en'>
+<html lang="en" data-theme="light">
 <head>
-    <meta charset='UTF-8'>
-    <title>QuantumPay Dashboard</title>
-    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' ws: wss: http: https:;">
+    <title>QuantumPay Payment Race Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        canvas { max-width: 800px; margin-bottom: 20px; }
+        :root {
+            --primary: #6366F1;
+            --primary-light: rgba(99, 102, 241, 0.1);
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --background: #F8FAFC;
+            --card: rgba(255, 255, 255, 0.95);
+            --text: #0F172A;
+            --text-secondary: #64748B;
+            --border: rgba(226, 232, 240, 0.6);
+            --card-shadow:
+                0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --chart-grid: #E2E8F0;
+            --chart-text: #64748B;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --gradient-start: #6366F1;
+            --gradient-end: #A78BFA;
+            --blur-amount: 10px;
+        }
+
+        [data-theme="dark"] {
+            --primary: #818CF8;
+            --primary-light: rgba(129, 140, 248, 0.1);
+            --background: #0F172A;
+            --card: rgba(30, 41, 59, 0.95);
+            --text: #F1F5F9;
+            --text-secondary: #94A3B8;
+            --border: rgba(51, 65, 85, 0.6);
+            --card-shadow:
+                0 4px 6px -1px rgba(0, 0, 0, 0.2),
+                0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            --chart-grid: #334155;
+            --chart-text: #94A3B8;
+            --gradient-start: #818CF8;
+            --gradient-end: #C4B5FD;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: var(--transition);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(167, 139, 250, 0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1.5rem;
+            width: 100%;
+        }
+
+        .navbar {
+            background: var(--card);
+            padding: 1.25rem 0;
+            box-shadow: var(--card-shadow);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+            border-bottom: 1px solid var(--border);
+        }
+
+        .navbar-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            background: var(--primary);
+            color: white;
+            position: relative;
+            overflow: hidden;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            letter-spacing: 0.01em;
+            transform: translateY(0);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .theme-toggle {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .theme-toggle:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-title {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .card.best-performer .card-value {
+            color: var(--success);
+            background: linear-gradient(135deg, #059669 0%, #10B981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-wrapper {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+        }
+
+        .chart-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            opacity: 0.02;
+            pointer-events: none;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--success);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 1rem;
+            display: none;
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            z-index: 50;
+            font-weight: 500;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-radius: 1rem;
+            background: var(--card);
+            margin: 1rem 0;
+            border: 1px solid var(--border);
+            font-size: 0.875rem;
+            font-weight: 600;
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--danger);
+            position: relative;
+        }
+
+        .status-indicator.connected {
+            background: var(--success);
+        }
+
+        .status-indicator.connected::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            border-top: 1px solid var(--border);
+            background: var(--card);
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%) translateY(0);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            70% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -1000px 0;
+            }
+            100% {
+                background-position: 1000px 0;
+            }
+        }
+
+        .loading {
+            animation: shimmer 2s infinite linear;
+            background: linear-gradient(to right, var(--card) 4%, var(--primary-light) 25%, var(--card) 36%);
+            background-size: 1000px 100%;
+        }
+
+        @media (max-width: 768px) {
+            .navbar-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 1.5rem;
+            }
+
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+
+            .btn {
+                flex: 1;
+                justify-content: center;
+                min-width: 120px;
+                padding: 0.625rem 1rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+
+            .chart-wrapper {
+                padding: 1.5rem;
+                min-height: 300px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        .hidden {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>QuantumPay Payment Race Dashboard</h1>
-    <canvas id='winsChart'></canvas>
-    <canvas id='savingsChart'></canvas>
-    <script>
-        let winsData = { Stripe: 0, PayPal: 0, Square: 0 };
-        let totalSavings = 0;
-        let savingsData = [];
+    <nav class="navbar">
+        <div class="container navbar-content">
+            <div>
+                <h1 class="title">QuantumPay Payment Race Dashboard</h1>
+                <p class="subtitle">Real-time payment gateway performance monitoring</p>
+            </div>
+            <div class="controls">
+                <button class="btn theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <span class="theme-icon">🌞</span>
+                    <span>Theme</span>
+                </button>
+                <button class="btn" id="resetBtn" aria-label="Reset dashboard">
+                    <span>↺</span>
+                    <span>Reset</span>
+                </button>
+                <button class="btn" id="downloadBtn" aria-label="Download report">
+                    <span>↓</span>
+                    <span>Download Report</span>
+                </button>
+            </div>
+        </div>
+    </nav>
 
+    <div class="container">
+        <div class="connection-status" role="status">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Connecting to gateway...</span>
+        </div>
+
+        <div class="cards-grid">
+            <div class="card hidden">
+                <div class="card-title">Total Transactions</div>
+                <div class="card-value" id="totalTransactions">0</div>
+            </div>
+            <div class="card hidden">
+                <div class="card-title">Total Savings</div>
+                <div class="card-value" id="totalSavings">$0.00</div>
+            </div>
+            <div class="card hidden">
+                <div class="card-title">Best Performer</div>
+                <div class="card-value" id="bestPerformer">-</div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-wrapper hidden">
+                <canvas id="winsChart"></canvas>
+            </div>
+            <div class="chart-wrapper hidden">
+                <canvas id="savingsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+    </div>
+
+    <footer class="footer">
+        <p>QuantumPay Dashboard v1.1.0 | © 2024 QuantumPay</p>
+    </footer>
+
+    <script>
+        // Performance optimization: Debounce function
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Intersection Observer for animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.hidden').forEach(el => observer.observe(el));
+
+        // Theme handling with local storage persistence
+        const themeToggle = document.getElementById('themeToggle');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+        let isDarkMode = localStorage.getItem('theme') === 'dark' ||
+            (!localStorage.getItem('theme') && prefersDark.matches);
+
+        function setTheme(isDark) {
+            isDarkMode = isDark;
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            themeToggle.querySelector('.theme-icon').textContent = isDark ? '🌜' : '🌞';
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+            const textColor = isDark ? '#94A3B8' : '#64748B';
+            const gridColor = isDark ? '#334155' : '#E2E8F0';
+
+            const chartConfig = {
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor } }
+                },
+                plugins: { legend: { labels: { color: textColor } } }
+            };
+
+            [winsChart, savingsChart].forEach(chart => {
+                if (chart) {
+                    chart.options.scales = chartConfig.scales;
+                    chart.options.plugins.legend = chartConfig.plugins.legend;
+                    chart.update('none'); // Disable animation for theme changes
+                }
+            });
+        }
+
+        // Toast notifications with queue
+        const toastQueue = [];
+        let isShowingToast = false;
+
+        function showToast(message, type = 'success') {
+            toastQueue.push({ message, type });
+            if (!isShowingToast) {
+                processToastQueue();
+            }
+        }
+
+        function processToastQueue() {
+            if (toastQueue.length === 0) {
+                isShowingToast = false;
+                return;
+            }
+
+            isShowingToast = true;
+            const { message, type } = toastQueue.shift();
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            toast.style.background = type === 'success' ? 'var(--success)' : 'var(--danger)';
+
+            setTimeout(() => {
+                toast.style.display = 'none';
+                setTimeout(() => processToastQueue(), 100);
+            }, 3000);
+        }
+
+        // Chart initialization with optimized options
+        const commonChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeInOutQuart',
+                delay: (context) => context.dataIndex * 50
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'var(--card)',
+                    titleColor: 'var(--text)',
+                    bodyColor: 'var(--text)',
+                    borderColor: 'var(--border)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleFont: { family: 'Plus Jakarta Sans', size: 14, weight: '600' },
+                    bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toFixed(2);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        };
+
+        // Initialize charts with optimized configurations
         const winsChart = new Chart(document.getElementById('winsChart'), {
             type: 'bar',
             data: {
                 labels: ['Stripe', 'PayPal', 'Square'],
                 datasets: [{
-                    label: 'Wins',
+                    label: 'Gateway Wins',
                     data: [0, 0, 0],
-                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56']
+                    backgroundColor: ['#10B981', '#6366F1', '#F59E0B'],
+                    borderRadius: 12,
+                    borderSkipped: false,
+                    barThickness: 40
                 }]
             },
             options: {
-                scales: { y: { beginAtZero: true, title: { display: true, text: 'Wins' } } },
-                plugins: { title: { display: true, text: 'Gateway Wins' } }
+                ...commonChartOptions,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { drawBorder: false, color: 'var(--chart-grid)', lineWidth: 0.5 },
+                        ticks: { color: 'var(--chart-text)', font: { family: 'Plus Jakarta Sans', size: 12 }, padding: 10 }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: 'var(--chart-text)', font: { family: 'Plus Jakarta Sans', size: 12 } }
+                    }
+                }
             }
         });
 
@@ -39,99 +669,251 @@
             data: {
                 labels: [],
                 datasets: [{
-                    label: 'Total Savings ($)',
+                    label: 'Cumulative Savings ($)',
                     data: [],
-                    borderColor: '#4BC0C0',
-                    fill: false
+                    borderColor: '#6366F1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#6366F1',
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 3
                 }]
             },
             options: {
-                scales: { y: { beginAtZero: true, title: { display: true, text: 'Savings ($)' } } },
-                plugins: { title: { display: true, text: 'Cumulative Savings Over Time' } }
+                ...commonChartOptions,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'var(--chart-grid)', lineWidth: 0.5 },
+                        ticks: {
+                            color: 'var(--chart-text)',
+                            font: { family: 'Plus Jakarta Sans', size: 12 },
+                            padding: 10,
+                            callback: value => '$' + value.toFixed(2)
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: 'var(--chart-text)', font: { family: 'Plus Jakarta Sans', size: 12 } }
+                    }
+                }
             }
         });
 
-        // Fetch initial data
+        // Initialize theme
+        setTheme(isDarkMode);
+
+        // Theme toggle with system preference sync
+        themeToggle.addEventListener('click', () => setTheme(!isDarkMode));
+        prefersDark.addEventListener('change', e => {
+            if (!localStorage.getItem('theme')) {
+                setTheme(e.matches);
+            }
+        });
+
+        // Data state management
+        const state = {
+            winsData: { Stripe: 0, PayPal: 0, Square: 0 },
+            totalSavings: 0,
+            transactionCount: 0
+        };
+
+        // WebSocket connection with reconnection logic
+        let ws;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 1000;
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/ws');
+
+            ws.onopen = () => {
+                updateConnectionStatus(true);
+                reconnectAttempts = 0;
+                loadInitialData();
+            };
+
+            ws.onclose = () => {
+                updateConnectionStatus(false);
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(connectWebSocket, reconnectDelay * reconnectAttempts);
+                    showToast(`Connection lost. Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`, 'error');
+                } else {
+                    showToast('Connection lost. Please refresh the page to reconnect.', 'error');
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showToast('Connection error occurred', 'error');
+            };
+
+            ws.onmessage = handleWebSocketMessage;
+        }
+
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+
+        function updateConnectionStatus(connected) {
+            statusIndicator.classList.toggle('connected', connected);
+            statusText.textContent = connected ? 'Connected to gateway' : 'Disconnected from gateway';
+        }
+
+        // Initial data loading with error handling
         async function loadInitialData() {
             try {
                 const response = await fetch('http://localhost:8000/dashboard-data');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
-                console.log('Initial data:', data);
 
-                winsData = {
-                    Stripe: data.summary['Stripe Wins'],
-                    PayPal: data.summary['PayPal Wins'],
-                    Square: data.summary['Square Wins']
+                state.winsData = {
+                    Stripe: data.summary?.['Stripe Wins'] || 0,
+                    PayPal: data.summary?.['PayPal Wins'] || 0,
+                    Square: data.summary?.['Square Wins'] || 0
                 };
-                winsChart.data.datasets[0].data = [winsData.Stripe, winsData.PayPal, winsData.Square];
-                winsChart.update();
+                state.totalSavings = data.transactions?.reduce((sum, tx) => sum + (tx.savings || 0), 0) || 0;
+                state.transactionCount = data.transactions?.length || 0;
 
-                totalSavings = 0;
-                savingsData = [];
-                data.transactions.forEach(tx => {
-                    totalSavings += tx.savings;
-                    savingsData.push(totalSavings);
-                    savingsChart.data.labels.push(`T${tx.transaction}`);
-                });
-                savingsChart.data.datasets[0].data = savingsData;
-                savingsChart.update();
-            } catch (err) {
-                console.error('Error loading initial data:', err);
+                updateCharts();
+                updateSummaryCards();
+                showToast('Dashboard data loaded successfully');
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+                showToast('Failed to load initial data. Please refresh the page.', 'error');
             }
         }
 
-        // WebSocket for live updates
-        const ws = new WebSocket('ws://localhost:8000/ws');
-        ws.onmessage = (event) => {
+        // Optimized chart updates
+        const updateCharts = debounce(() => {
+            requestAnimationFrame(() => {
+                winsChart.data.datasets[0].data = [
+                    state.winsData.Stripe,
+                    state.winsData.PayPal,
+                    state.winsData.Square
+                ];
+                winsChart.update('show');
+
+                if (savingsChart.data.labels.length > 20) {
+                    savingsChart.data.labels.shift();
+                    savingsChart.data.datasets[0].data.shift();
+                }
+                savingsChart.update('show');
+            });
+        }, 100);
+
+        // Optimized summary card updates
+        function updateSummaryCards() {
+            requestAnimationFrame(() => {
+                document.getElementById('totalTransactions').textContent = state.transactionCount;
+                document.getElementById('totalSavings').textContent = formatCurrency(state.totalSavings);
+
+                const bestPerformer = Object.entries(state.winsData)
+                    .reduce((a, b) => b[1] > a[1] ? b : a, ['None', 0])[0];
+                const bestPerformerElement = document.getElementById('bestPerformer');
+                bestPerformerElement.textContent = bestPerformer;
+                bestPerformerElement.parentElement.classList.toggle('best-performer', bestPerformer !== 'None');
+            });
+        }
+
+        // Optimized currency formatting
+        const currencyFormatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        function formatCurrency(amount) {
+            return currencyFormatter.format(amount);
+        }
+
+        // WebSocket message handling with error boundary
+        function handleWebSocketMessage(event) {
             try {
                 const data = JSON.parse(event.data);
-                console.log('WebSocket Received:', data);
 
-                // Handle reset signal
                 if (data.reset) {
-                    winsData = { Stripe: 0, PayPal: 0, Square: 0 };
-                    totalSavings = 0;
-                    savingsData = [];
+                    state.winsData = { Stripe: 0, PayPal: 0, Square: 0 };
+                    state.totalSavings = 0;
+                    state.transactionCount = 0;
                     savingsChart.data.labels = [];
-                    winsChart.data.datasets[0].data = [0, 0, 0];
                     savingsChart.data.datasets[0].data = [];
-                    winsChart.update();
-                    savingsChart.update();
-                    console.log('Charts reset for new charge session');
-                    return;
-                }
+                    showToast('Dashboard reset complete');
+                } else if (data.winner && data.savings !== undefined) {
+                    const normalizedWinner = data.winner.charAt(0).toUpperCase() + data.winner.slice(1).toLowerCase();
+                    const winner = normalizedWinner === "Paypal" ? "PayPal" : normalizedWinner;
 
-                if (data.winner && data.savings !== undefined && data.transaction !== undefined) {
-                    const winner = data.winner;
-                    if (winsData.hasOwnProperty(winner)) {
-                        winsData[winner]++;
-                        winsChart.data.datasets[0].data = [winsData.Stripe, winsData.PayPal, winsData.Square];
-                        winsChart.update();
-                    } else {
-                        console.error("Unknown winner:", winner);
+                    if (state.winsData.hasOwnProperty(winner)) {
+                        state.winsData[winner]++;
+                        state.totalSavings += data.savings;
+                        state.transactionCount++;
+
+                        savingsChart.data.labels.push(`T${state.transactionCount}`);
+                        savingsChart.data.datasets[0].data.push(state.totalSavings);
+
+                        showToast(`New transaction: ${winner} won! Saved ${formatCurrency(data.savings)}`);
                     }
-
-                    totalSavings += data.savings;
-                    savingsData.push(totalSavings);
-                    savingsChart.data.labels.push(`T${data.transaction}`);
-                    savingsChart.data.datasets[0].data = savingsData;
-                    savingsChart.update();
-
-                    console.log('Transaction Details:', data.details);
-                } else {
-                    console.error("Received malformed data:", data);
                 }
-            } catch (err) {
-                console.error("Error parsing WebSocket message:", err);
-            }
-        };
 
-        ws.onopen = () => {
-            console.log('Connected to WebSocket');
-            loadInitialData();
-        };
-        ws.onerror = (err) => console.error('WebSocket error:', err);
-        ws.onclose = () => console.log('WebSocket closed');
+                updateCharts();
+                updateSummaryCards();
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+                showToast('Error processing update', 'error');
+            }
+        }
+
+        // Download report with error handling
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            try {
+                const report = {
+                    timestamp: new Date().toISOString(),
+                    totalTransactions: state.transactionCount,
+                    totalSavings: state.totalSavings,
+                    gatewayWins: state.winsData,
+                    savingsHistory: savingsChart.data.datasets[0].data
+                };
+
+                const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `quantumpay-report-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                showToast('Report downloaded successfully');
+            } catch (error) {
+                console.error('Error downloading report:', error);
+                showToast('Failed to download report', 'error');
+            }
+        });
+
+        // Reset dashboard with confirmation
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to reset the dashboard?')) {
+                if (ws?.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'reset' }));
+                } else {
+                    showToast('Cannot reset: WebSocket disconnected', 'error');
+                }
+            }
+        });
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+
+        // Handle visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && (!ws || ws.readyState !== WebSocket.OPEN)) {
+                connectWebSocket();
+            }
+        });
     </script>
 </body>
 </html>
