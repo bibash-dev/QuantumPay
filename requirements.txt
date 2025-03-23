@@ -1,6 +1,7 @@
 flake8
 stripe
 paypalrestsdk
+squareup
 python-dotenv
 qiskit
 qiskit-optimization
