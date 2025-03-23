@@ -8,3 +8,6 @@ qiskit-optimization
 qiskit-algorithms
 fastapi
 uvicorn
+sqlalchemy[asyncio]
+asyncpg
+pydantic
