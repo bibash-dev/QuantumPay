@@ -30,7 +30,6 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 logger = logging.getLogger(__name__)
 
-
 # Mock fee trends for 3 months (March-May 2025)
 FEE_TRENDS = {
     "1month": {"Stripe": [2.9], "PayPal": [2.99], "Square": [2.8], "labels": ["March"]},
@@ -56,7 +55,6 @@ async def get_fee_forecast(period: str = "3month"):
             status_code=400, detail="Invalid period. Use 1month, 3month, or 6month."
         )
 
-    # Check Redis cache
     redis_client = app.state.redis
     cache_key = f"forecast:{period}"
     cached_data = await redis_client.get(cache_key)
@@ -65,13 +63,9 @@ async def get_fee_forecast(period: str = "3month"):
         logger.info("Serving forecast from Redis cache: %s", period)
         return json.loads(cached_data)
 
-    # Mock data (replace with Linear Regression in production)
     forecast_data = FEE_TRENDS[period]
-
-    # Cache the result in Redis (expire after 1 hour)
     await redis_client.setex(cache_key, 3600, json.dumps(forecast_data))
     logger.info("Generated and cached forecast: %s", period)
-
     return forecast_data
 
 
@@ -105,23 +99,16 @@ async def charge(db: AsyncSession = Depends(get_db)):
     total_savings = 0.0
     results_list = []
 
-    # Delete old transactions before saving new ones
     await db.execute(delete(Transaction))
     await db.commit()
-
-    # Broadcast reset signal
     await broadcast({"reset": True})
 
     logger.info("Starting all 60 gateway calls...")
-    tasks = [
-        g() for g in gateways for _ in range(20)
-    ]  # 20 Stripe, 20 PayPal, 20 Square
+    tasks = [g() for g in gateways for _ in range(20)]
     all_results = await asyncio.gather(*tasks)
     logger.info("All gateway calls completed.")
 
-    # Reorganize into groups of [Stripe, PayPal, Square]
-    for i in range(20):  # 20 transactions
-        # Index: Stripe (0-19), PayPal (20-39), Square (40-59)
+    for i in range(20):
         results = [all_results[i], all_results[i + 20], all_results[i + 40]]
         winner, savings, transaction_results = route_transaction(results, wins)
         wins[winner] += 1
@@ -130,7 +117,6 @@ async def charge(db: AsyncSession = Depends(get_db)):
         for r in transaction_results:
             await save_to_db(r, db)
 
-        # Normalize winner
         normalized_winner = winner.capitalize()
         if normalized_winner == "Paypal":
             normalized_winner = "PayPal"
@@ -161,7 +147,6 @@ async def charge(db: AsyncSession = Depends(get_db)):
 
 @app.get("/dashboard-data")
 async def get_dashboard_data(db: AsyncSession = Depends(get_db)):
-    # Fetch the last 60 transactions (20 sets of 3)
     query = select(Transaction).order_by(Transaction.timestamp.desc()).limit(60)
     result = await db.execute(query)
     transactions = result.scalars().all()
@@ -170,18 +155,15 @@ async def get_dashboard_data(db: AsyncSession = Depends(get_db)):
     total_savings = 0.0
     results_list = []
 
-    # Group transactions into sets of 3 (Stripe, PayPal, Square per transaction)
     for i in range(0, len(transactions), 3):
         group = transactions[i : i + 3]
-        if len(group) != 3:  # Skip incomplete groups
+        if len(group) != 3:
             continue
 
-        # Use route_transaction for consistency with /charge
         winner, savings, transaction_results = route_transaction(group, wins)
         wins[winner] += 1
         total_savings += savings
 
-        # Normalize winner case to match frontend
         normalized_winner = winner.capitalize()
         if normalized_winner == "Paypal":
             normalized_winner = "PayPal"
@@ -208,14 +190,17 @@ async def get_dashboard_data(db: AsyncSession = Depends(get_db)):
     }
 
 
-# Websocket handling
 connected_clients = set()
 
 
 async def broadcast(message):
     logger.info("Broadcasting: %s", message)
-    for client in connected_clients:
-        await client.send_json(message)
+    for client in list(connected_clients):
+        try:
+            await client.send_json(message)
+        except Exception as e:
+            logger.error("Error broadcasting to client: %s", str(e))
+            connected_clients.remove(client)
 
 
 @app.websocket("/ws")
@@ -225,9 +210,21 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket client connected")
     try:
         while True:
-            await websocket.receive_text()  # Keep connection alive
+            try:
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=20.0)
+                logger.info(f"Received message: {data}")
+                if data.get("type") == "pong":
+                    logger.info("Received pong from client")
+                    continue
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+                logger.info("Sent ping to client")
+            except Exception as e:
+                logger.error(f"WebSocket inner loop error: {str(e)}", exc_info=True)
+                break
     except Exception as e:
-        logger.error("WebSocket error: %s", str(e))
+        logger.error(f"WebSocket outer loop error: {str(e)}", exc_info=True)
     finally:
         connected_clients.remove(websocket)
         logger.info("WebSocket client disconnected")
+        await websocket.close()
