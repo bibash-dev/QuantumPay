@@ -5,27 +5,75 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from quantum_pay.transact import (
-    stripe_charge,
-    paypal_charge,
-    square_charge,
-    route_transaction,
-)
-from quantum_pay.models import Transaction
-from quantum_pay.schemas import TransactionCreate, TransactionOut
-from quantum_pay.database import get_db, init_db
+from transact import stripe_charge, paypal_charge, square_charge, route_transaction
+from models import Transaction
+from schemas import TransactionCreate, TransactionOut
+from database import get_db, init_db
 import asyncio
+import redis.asyncio as redis
+import json
+import os
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    app.state.redis = redis.from_url(redis_url)
     await init_db()
     yield
+    await app.state.redis.close()
 
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="quantum_pay/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 logger = logging.getLogger(__name__)
+
+
+# Mock fee trends for 3 months (March-May 2025)
+FEE_TRENDS = {
+    "1month": {
+        "Stripe": [2.9],
+        "PayPal": [2.99],
+        "Square": [2.8],
+        "labels": ["March"]
+    },
+    "3month": {
+        "Stripe": [2.9, 2.8, 2.85],
+        "PayPal": [2.99, 2.95, 2.7],
+        "Square": [2.8, 2.75, 2.9],
+        "labels": ["March", "April", "May"]
+    },
+    "6month": {
+        "Stripe": [2.9, 2.9, 2.9, 2.8, 2.8, 2.85],
+        "PayPal": [2.99, 2.99, 2.99, 2.95, 2.95, 2.7],
+        "Square": [2.8, 2.8, 2.8, 2.75, 2.75, 2.9],
+        "labels": ["Dec", "Jan", "Feb", "March", "April", "May"]
+    }
+}
+
+
+@app.get("/forecast")
+async def get_fee_forecast(period: str = "3month"):
+    if period not in ["1month", "3month", "6month"]:
+        raise HTTPException(status_code=400, detail="Invalid period. Use 1month, 3month, or 6month.")
+
+    # Check Redis cache
+    redis_client = app.state.redis
+    cache_key = f"forecast:{period}"
+    cached_data = await redis_client.get(cache_key)
+
+    if cached_data:
+        logger.info("Serving forecast from Redis cache: %s", period)
+        return json.loads(cached_data)
+
+    # Mock data (replace with Linear Regression in production)
+    forecast_data = FEE_TRENDS[period]
+
+    # Cache the result in Redis (expire after 1 hour)
+    await redis_client.setex(cache_key, 3600, json.dumps(forecast_data))
+    logger.info("Generated and cached forecast: %s", period)
+
+    return forecast_data
 
 
 async def save_to_db(

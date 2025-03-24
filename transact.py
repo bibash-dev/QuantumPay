@@ -1,7 +1,7 @@
 import stripe
 import paypalrestsdk
 from square.client import Client
-from . import config
+import config
 import logging
 import time
 import random
@@ -9,7 +9,7 @@ import asyncio
 from qiskit_optimization import QuadraticProgram
 from qiskit_algorithms import NumPyMinimumEigensolver
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
-from quantum_pay.schemas import TransactionCreate
+from schemas import TransactionCreate
 
 logging.basicConfig(level=logging.INFO, filename="quantum_pay.log")
 logger = logging.getLogger(__name__)

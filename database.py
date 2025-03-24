@@ -2,8 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 import logging
-from . import config
-from .models import Base
+import config
+from models import Base
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
