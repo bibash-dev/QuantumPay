@@ -1,15 +1,18 @@
-import stripe
-import paypalrestsdk
-from square.client import Client
-import config
-import logging
-import time
-import random
 import asyncio
-from qiskit_optimization import QuadraticProgram
+import logging
+import random
+import time
+
+import paypalrestsdk
+import stripe
 from qiskit_algorithms import NumPyMinimumEigensolver
+from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
+from square.client import Client
+
+import config
 from schemas import TransactionCreate
+
 
 logging.basicConfig(level=logging.INFO, filename="quantum_pay.log")
 logger = logging.getLogger(__name__)
@@ -122,23 +125,31 @@ def route_transaction(results, wins=None):
     if wins is None:
         wins = {"stripe": 0, "paypal": 0, "square": 0}
 
+    # Filter out 'unknown' gateways for cost calculation
+    valid_results = [r for r in results if r.gateway.lower() in wins]
+    if not valid_results:
+        logger.warning("All gateways are 'unknown', defaulting to Stripe")
+        return "stripe", 0.0, results
+
+    # Define unique gateways (excluding 'unknown')
+    unique_gateways = {r.gateway.lower() for r in valid_results}
+    if not unique_gateways:
+        logger.warning("No valid gateways found, defaulting to Stripe")
+        return "stripe", 0.0, results
+
+    # Calculate costs for valid gateways
+    costs = {}
+    for r in valid_results:
+        gateway = r.gateway.lower()
+        costs[gateway] = r.fee + 0.01 * r.latency + 6.0 * wins[gateway]
+
+    # Set up the Qiskit Quadratic Program
     qp = QuadraticProgram()
-    # Define unique variables once
-    unique_gateways = {
-        r.gateway.lower() for r in results
-    }  # 'stripe', 'paypal', 'square'
     for gateway in unique_gateways:
         qp.binary_var(gateway)
 
-    # Add penalty for overused gateways
-    costs = {
-        r.gateway.lower(): r.fee + 0.01 * r.latency + 6.0 * wins[r.gateway.lower()]
-        for r in results
-    }
     qp.minimize(linear=costs)
-
-    # Add constraint: one gateway selected
-    qp.linear_constraint({r.gateway.lower(): 1 for r in results}, "==", 1)
+    qp.linear_constraint({gateway: 1 for gateway in unique_gateways}, "==", 1)
 
     try:
         optimizer = MinimumEigenOptimizer(NumPyMinimumEigensolver())
@@ -149,7 +160,12 @@ def route_transaction(results, wins=None):
         logger.error("Qiskit solver failed: %s, falling back to manual routing", str(e))
         winner = min(costs, key=costs.get)
 
-    savings = max(r.fee for r in results) - min(r.fee for r in results)
+    # Calculate savings based on valid results
+    savings = (
+        max(r.fee for r in valid_results) - min(r.fee for r in valid_results)
+        if valid_results
+        else 0.0
+    )
 
     log_msg = (
         "Routing decision: %s ("

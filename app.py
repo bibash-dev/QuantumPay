@@ -1,18 +1,20 @@
-from fastapi import FastAPI, WebSocket, Depends, HTTPException
-from contextlib import asynccontextmanager
+import asyncio
+import json
 import logging
+import os
+from contextlib import asynccontextmanager
+
+import redis.asyncio as redis
+from fastapi import FastAPI, WebSocket, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from transact import stripe_charge, paypal_charge, square_charge, route_transaction
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db, init_db
 from models import Transaction
 from schemas import TransactionCreate, TransactionOut
-from database import get_db, init_db
-import asyncio
-import redis.asyncio as redis
-import json
-import os
+from transact import stripe_charge, paypal_charge, square_charge, route_transaction
 
 
 @asynccontextmanager
@@ -31,31 +33,28 @@ logger = logging.getLogger(__name__)
 
 # Mock fee trends for 3 months (March-May 2025)
 FEE_TRENDS = {
-    "1month": {
-        "Stripe": [2.9],
-        "PayPal": [2.99],
-        "Square": [2.8],
-        "labels": ["March"]
-    },
+    "1month": {"Stripe": [2.9], "PayPal": [2.99], "Square": [2.8], "labels": ["March"]},
     "3month": {
         "Stripe": [2.9, 2.8, 2.85],
         "PayPal": [2.99, 2.95, 2.7],
         "Square": [2.8, 2.75, 2.9],
-        "labels": ["March", "April", "May"]
+        "labels": ["March", "April", "May"],
     },
     "6month": {
         "Stripe": [2.9, 2.9, 2.9, 2.8, 2.8, 2.85],
         "PayPal": [2.99, 2.99, 2.99, 2.95, 2.95, 2.7],
         "Square": [2.8, 2.8, 2.8, 2.75, 2.75, 2.9],
-        "labels": ["Dec", "Jan", "Feb", "March", "April", "May"]
-    }
+        "labels": ["Dec", "Jan", "Feb", "March", "April", "May"],
+    },
 }
 
 
 @app.get("/forecast")
 async def get_fee_forecast(period: str = "3month"):
     if period not in ["1month", "3month", "6month"]:
-        raise HTTPException(status_code=400, detail="Invalid period. Use 1month, 3month, or 6month.")
+        raise HTTPException(
+            status_code=400, detail="Invalid period. Use 1month, 3month, or 6month."
+        )
 
     # Check Redis cache
     redis_client = app.state.redis
