@@ -849,14 +849,7 @@
         try {
             const data = JSON.parse(event.data);
 
-            if (data.reset) {
-                winsData = {Stripe: 0, PayPal: 0, Square: 0};
-                totalSavings = 0;
-                transactionCount = 0;
-                savingsChart.data.labels = [];
-                savingsChart.data.datasets[0].data = [];
-                showToast('Dashboard reset complete');
-            } else if (data.winner && data.savings !== undefined) {
+            if (data.winner && data.savings !== undefined) {
                 const normalizedWinner = data.winner.charAt(0).toUpperCase() + data.winner.slice(1).toLowerCase();
                 const winner = normalizedWinner === "Paypal" ? "PayPal" : normalizedWinner;
                 if (winsData.hasOwnProperty(winner)) {

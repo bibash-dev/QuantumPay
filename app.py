@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager
 
 import redis.asyncio as redis
-from fastapi import FastAPI, WebSocket, Depends, HTTPException
+from fastapi import FastAPI, WebSocket, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, delete
@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import Transaction
+from websocket import broadcast
+from forecast import FeeForecaster
 from schemas import TransactionCreate, TransactionOut
 from transact import stripe_charge, paypal_charge, square_charge, route_transaction
 
@@ -30,42 +32,47 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 logger = logging.getLogger(__name__)
 
-# Mock fee trends for 3 months (March-May 2025)
-FEE_TRENDS = {
-    "1month": {"Stripe": [2.9], "PayPal": [2.99], "Square": [2.8], "labels": ["March"]},
-    "3month": {
-        "Stripe": [2.9, 2.8, 2.85],
-        "PayPal": [2.99, 2.95, 2.7],
-        "Square": [2.8, 2.75, 2.9],
-        "labels": ["March", "April", "May"],
-    },
-    "6month": {
-        "Stripe": [2.9, 2.9, 2.9, 2.8, 2.8, 2.85],
-        "PayPal": [2.99, 2.99, 2.99, 2.95, 2.95, 2.7],
-        "Square": [2.8, 2.8, 2.8, 2.75, 2.75, 2.9],
-        "labels": ["Dec", "Jan", "Feb", "March", "April", "May"],
-    },
-}
+
+fee_forecaster = FeeForecaster()
 
 
 @app.get("/forecast")
-async def get_fee_forecast(period: str = "3month"):
-    if period not in ["1month", "3month", "6month"]:
+async def get_fee_forecast(
+    request: Request,
+    period: str = "3month",
+    db: AsyncSession = Depends(get_db),
+):
+    if period not in {"1month", "3month", "6month"}:
         raise HTTPException(
             status_code=400, detail="Invalid period. Use 1month, 3month, or 6month."
         )
 
-    redis_client = app.state.redis
+    # Get Redis client from app state
+    redis_client = request.app.state.redis
+
+    # Try to get cached forecast first
     cache_key = f"forecast:{period}"
     cached_data = await redis_client.get(cache_key)
-
     if cached_data:
-        logger.info("Serving forecast from Redis cache: %s", period)
+        logger.info(f"Returning cached forecast for {period}")
         return json.loads(cached_data)
 
-    forecast_data = FEE_TRENDS[period]
+    # Generate fresh forecast if not cached
+    historical_data, earliest_timestamp = await fee_forecaster.fetch_historical_data(db)
+    prepared_data = fee_forecaster.prepare_data_for_regression(historical_data)
+    fee_forecaster.train_models(prepared_data)
+
+    forecast_data = {
+        "labels": fee_forecaster.get_forecast_labels(earliest_timestamp, period),
+        "Stripe": fee_forecaster.predict("Stripe", earliest_timestamp, period),
+        "PayPal": fee_forecaster.predict("PayPal", earliest_timestamp, period),
+        "Square": fee_forecaster.predict("Square", earliest_timestamp, period),
+    }
+
+    # Cache the new forecast
     await redis_client.setex(cache_key, 3600, json.dumps(forecast_data))
-    logger.info("Generated and cached forecast: %s", period)
+    logger.info(f"Generated and cached new forecast: {period}")
+
     return forecast_data
 
 
@@ -99,9 +106,17 @@ async def charge(db: AsyncSession = Depends(get_db)):
     total_savings = 0.0
     results_list = []
 
-    await db.execute(delete(Transaction))
-    await db.commit()
-    await broadcast({"reset": True})
+    # Count the existing number of transaction groups (each group has 3 gateway calls)
+    query = select(Transaction).order_by(Transaction.timestamp.desc())
+    result = await db.execute(query)
+    transactions = result.scalars().all()
+    existing_transaction_count = (
+        len(transactions) // 3
+    )  # Each transaction group has 3 entries
+
+    # await db.execute(delete(Transaction))
+    # await db.commit()
+    # await broadcast({"reset": True})
 
     logger.info("Starting all 60 gateway calls...")
     tasks = [g() for g in gateways for _ in range(20)]
@@ -121,8 +136,11 @@ async def charge(db: AsyncSession = Depends(get_db)):
         if normalized_winner == "Paypal":
             normalized_winner = "PayPal"
 
+        # Increment the transaction number based on existing count
+        transaction_number = existing_transaction_count + i + 1
+
         result_data = {
-            "transaction": i + 1,
+            "transaction": transaction_number,
             "winner": normalized_winner,
             "savings": savings,
             "details": [
@@ -147,7 +165,7 @@ async def charge(db: AsyncSession = Depends(get_db)):
 
 @app.get("/dashboard-data")
 async def get_dashboard_data(db: AsyncSession = Depends(get_db)):
-    query = select(Transaction).order_by(Transaction.timestamp.desc()).limit(60)
+    query = select(Transaction).order_by(Transaction.timestamp.desc())
     result = await db.execute(query)
     transactions = result.scalars().all()
 
@@ -190,41 +208,85 @@ async def get_dashboard_data(db: AsyncSession = Depends(get_db)):
     }
 
 
+# Websocket handling
 connected_clients = set()
 
 
-async def broadcast(message):
-    logger.info("Broadcasting: %s", message)
-    for client in list(connected_clients):
+async def broadcast(message: dict):
+    if not connected_clients:
+        return
+
+    logger.info(
+        "Broadcasting message to %d clients: %s", len(connected_clients), message
+    )
+
+    for client in list(
+        connected_clients
+    ):  # Create a copy to avoid modification during iteration
         try:
             await client.send_json(message)
+        except (RuntimeError, ConnectionError) as e:
+            logger.warning("Client disconnected during broadcast: %s", str(e))
+            connected_clients.discard(client)
         except Exception as e:
-            logger.error("Error broadcasting to client: %s", str(e))
-            connected_clients.remove(client)
+            logger.error(
+                "Unexpected error broadcasting to client: %s", str(e), exc_info=True
+            )
+            connected_clients.discard(client)
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
-    logger.info("WebSocket client connected")
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    logger.info("WebSocket client connected from %s", client_ip)
+
     try:
         while True:
             try:
+                # Wait for message with timeout for heartbeat
                 data = await asyncio.wait_for(websocket.receive_json(), timeout=20.0)
-                logger.info(f"Received message: {data}")
-                if data.get("type") == "pong":
-                    logger.info("Received pong from client")
+
+                if isinstance(data, dict) and data.get("type") == "pong":
+                    logger.debug("Received pong from client %s", client_ip)
                     continue
+
+                logger.info("Received message from %s: %s", client_ip, data)
+
             except asyncio.TimeoutError:
-                await websocket.send_json({"type": "ping"})
-                logger.info("Sent ping to client")
-            except Exception as e:
-                logger.error(f"WebSocket inner loop error: {str(e)}", exc_info=True)
+                # Send heartbeat ping
+                try:
+                    await websocket.send_json({"type": "ping"})
+                    logger.debug("Sent ping to client %s", client_ip)
+                except Exception as e:
+                    raise ConnectionError("Failed to send ping") from e
+
+            except (WebSocketDisconnect, ConnectionError):
+                logger.info("Client %s disconnected", client_ip)
                 break
+
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON received from client %s", client_ip)
+                await websocket.send_json({"error": "Invalid JSON format"})
+
+            except Exception as e:
+                logger.error(
+                    "Unexpected error with client %s: %s",
+                    client_ip,
+                    str(e),
+                    exc_info=True,
+                )
+                break
+
     except Exception as e:
-        logger.error(f"WebSocket outer loop error: {str(e)}", exc_info=True)
+        logger.error(
+            "WebSocket connection error with %s: %s", client_ip, str(e), exc_info=True
+        )
     finally:
-        connected_clients.remove(websocket)
-        logger.info("WebSocket client disconnected")
-        await websocket.close()
+        connected_clients.discard(websocket)
+        logger.info("WebSocket client %s disconnected", client_ip)
+        try:
+            await websocket.close()
+        except Exception:
+            pass  # Connection already closed
