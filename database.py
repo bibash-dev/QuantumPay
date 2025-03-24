@@ -1,9 +1,11 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
 import logging
+
 import config
 from models import Base
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +19,7 @@ engine = create_async_engine(DATABASE_URL, echo=True)
 # Create a sessionmaker for async sessions
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+
 async def init_db():
     try:
         async with engine.begin() as conn:
@@ -26,6 +29,7 @@ async def init_db():
     except SQLAlchemyError as e:
         logger.error(f"Error initializing database: {e}")
         raise
+
 
 async def get_db():
     """
