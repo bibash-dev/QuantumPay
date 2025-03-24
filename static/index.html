@@ -361,210 +361,309 @@
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container navbar-content">
-            <div>
-                <h1 class="title">QuantumPay Payment Race Dashboard</h1>
-                <p class="subtitle">Real-time payment gateway performance monitoring</p>
-            </div>
-            <div class="controls">
-                <button class="btn theme-toggle" id="themeToggle">
-                    <span class="theme-icon">🌞</span>
-                    <span>Theme</span>
-                </button>
-                <button class="btn" id="resetBtn">
-                    <span>↺</span>
-                    <span>Reset</span>
-                </button>
-                <button class="btn" id="downloadBtn">
-                    <span>↓</span>
-                    <span>Download Report</span>
-                </button>
-            </div>
+<nav class="navbar">
+    <div class="container navbar-content">
+        <div>
+            <h1 class="title">QuantumPay Payment Race Dashboard</h1>
+            <p class="subtitle">Real-time payment gateway performance monitoring</p>
         </div>
-    </nav>
-
-    <div class="container">
-        <div class="connection-status">
-            <div class="status-indicator" id="statusIndicator"></div>
-            <span id="statusText">Connecting to gateway...</span>
+        <div class="controls">
+            <button class="btn theme-toggle" id="themeToggle">
+                <span class="theme-icon">🌞</span>
+                <span>Theme</span>
+            </button>
+            <button class="btn" id="resetBtn">
+                <span>↺</span>
+                <span>Reset</span>
+            </button>
+            <button class="btn" id="downloadBtn">
+                <span>↓</span>
+                <span>Download Report</span>
+            </button>
         </div>
+    </div>
+</nav>
 
-        <div class="cards-grid">
-            <div class="card">
-                <div class="card-title">Total Transactions</div>
-                <div class="card-value" id="totalTransactions">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Total Savings</div>
-                <div class="card-value" id="totalSavings">$0.00</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Best Performer</div>
-                <div class="card-value" id="bestPerformer">-</div>
-            </div>
-        </div>
-
-        <div class="charts-container">
-            <div class="chart-wrapper">
-                <canvas id="winsChart"></canvas>
-            </div>
-            <div class="chart-wrapper">
-                <canvas id="savingsChart"></canvas>
-            </div>
-            <div class="chart-wrapper">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="font-size: 1rem; font-weight: 500;">Fee Forecast</h3>
-                    <select id="forecastPeriod" class="dropdown">
-                        <option value="1month">1 Month</option>
-                        <option value="3month" selected>3 Months</option>
-                        <option value="6month">6 Months</option>
-                    </select>
-                </div>
-                <canvas id="forecastChart"></canvas>
-            </div>
-        </div>
-
-        <div class="toast" id="toast"></div>
+<div class="container">
+    <div class="connection-status">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <span id="statusText">Connecting to gateway...</span>
     </div>
 
-    <footer class="footer">
-        <p>QuantumPay Dashboard v1.0.0 | © 2024 QuantumPay</p>
-    </footer>
+    <div class="cards-grid">
+        <div class="card">
+            <div class="card-title">Total Transactions</div>
+            <div class="card-value" id="totalTransactions">0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Total Savings</div>
+            <div class="card-value" id="totalSavings">$0.00</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Best Performer</div>
+            <div class="card-value" id="bestPerformer">-</div>
+        </div>
+    </div>
 
-    <script>
-        // Theme handling
-        const themeToggle = document.getElementById('themeToggle');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        let isDarkMode = prefersDark;
+    <div class="charts-container">
+        <div class="chart-wrapper">
+            <canvas id="winsChart"></canvas>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="savingsChart"></canvas>
+        </div>
+        <div class="chart-wrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="font-size: 1rem; font-weight: 500;">Fee Forecast</h3>
+                <select id="forecastPeriod" class="dropdown">
+                    <option value="1month">1 Month</option>
+                    <option value="3month" selected>3 Months</option>
+                    <option value="6month">6 Months</option>
+                </select>
+            </div>
+            <canvas id="forecastChart"></canvas>
+        </div>
+    </div>
 
-        function setTheme(isDark) {
-            isDarkMode = isDark;
-            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-            themeToggle.querySelector('.theme-icon').textContent = isDark ? '🌜' : '🌞';
+    <div class="toast" id="toast"></div>
+</div>
 
-            const textColor = isDark ? '#94A3B8' : '#64748B';
-            const gridColor = isDark ? '#334155' : '#E2E8F0';
+<footer class="footer">
+    <p>QuantumPay Dashboard v1.0.0 | © 2024 QuantumPay</p>
+</footer>
 
-            const chartConfig = {
-                scales: {
-                    x: { grid: { color: gridColor }, ticks: { color: textColor } },
-                    y: { grid: { color: gridColor }, ticks: { color: textColor } }
-                },
-                plugins: { legend: { labels: { color: textColor } } }
-            };
+<script>
+    // Theme handling
+    const themeToggle = document.getElementById('themeToggle');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let isDarkMode = prefersDark;
 
-            winsChart.options.scales = chartConfig.scales;
-            winsChart.options.plugins.legend = chartConfig.plugins.legend;
-            winsChart.data.datasets[0].backgroundColor = isDark
-                ? ['#34D399', '#818CF8', '#FBBF24']
-                : ['#10B981', '#6366F1', '#F59E0B'];
-            winsChart.update();
+    function setTheme(isDark) {
+        isDarkMode = isDark;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        themeToggle.querySelector('.theme-icon').textContent = isDark ? '🌜' : '🌞';
 
-            savingsChart.options.scales = chartConfig.scales;
-            savingsChart.options.plugins.legend = chartConfig.plugins.legend;
-            savingsChart.data.datasets[0].borderColor = isDark ? '#818CF8' : '#6366F1';
-            savingsChart.data.datasets[0].backgroundColor = isDark
-                ? Chart.helpers.color('#818CF8').alpha(0.1).rgbString()
-                : Chart.helpers.color('#6366F1').alpha(0.1).rgbString();
-            savingsChart.update();
+        const textColor = isDark ? '#94A3B8' : '#64748B';
+        const gridColor = isDark ? '#334155' : '#E2E8F0';
 
-            forecastChart.options.scales = chartConfig.scales;
-            forecastChart.options.plugins.legend = chartConfig.plugins.legend;
-            forecastChart.data.datasets.forEach(dataset => {
-                dataset.borderColor = isDark ? dataset.borderColor.replace('6366F1', '818CF8') : dataset.borderColor.replace('818CF8', '6366F1');
-                dataset.backgroundColor = isDark
-                    ? Chart.helpers.color(dataset.borderColor).alpha(0.1).rgbString()
-                    : Chart.helpers.color(dataset.borderColor).alpha(0.1).rgbString();
-            });
-            forecastChart.update();
-        }
-
-        // Toast notifications
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.style.display = 'block';
-            toast.style.background = type === 'success' ? 'var(--success)' : 'var(--danger)';
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
-        }
-
-        // Chart initialization
-        const chartOptions = {
-            responsive: true,
-            animation: { duration: 750, easing: 'easeInOutQuart' },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        padding: 20,
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-                        font: { family: 'Inter', size: 12, weight: '500' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'var(--card)',
-                    titleColor: 'var(--text)',
-                    bodyColor: 'var(--text)',
-                    borderColor: 'var(--border)',
-                    borderWidth: 1,
-                    padding: 12,
-                    cornerRadius: 8,
-                    titleFont: { family: 'Inter', size: 14, weight: '600' },
-                    bodyFont: { family: 'Inter', size: 12 },
-                    displayColors: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) { label += ': '; }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y.toFixed(2) + '%';
-                            }
-                            return label;
-                        }
-                    }
-                }
-            }
+        const chartConfig = {
+            scales: {
+                x: {grid: {color: gridColor}, ticks: {color: textColor}},
+                y: {grid: {color: gridColor}, ticks: {color: textColor}}
+            },
+            plugins: {legend: {labels: {color: textColor}}}
         };
 
-        const winsChart = new Chart(document.getElementById('winsChart'), {
-            type: 'bar',
-            data: {
-                labels: ['Stripe', 'PayPal', 'Square'],
-                datasets: [{
-                    label: 'Gateway Wins',
-                    data: [0, 0, 0],
-                    backgroundColor: ['#10B981', '#6366F1', '#F59E0B'],
-                    borderRadius: 12,
-                    borderSkipped: false,
-                    barThickness: 40
-                }]
+        winsChart.options.scales = chartConfig.scales;
+        winsChart.options.plugins.legend = chartConfig.plugins.legend;
+        winsChart.data.datasets[0].backgroundColor = isDark
+            ? ['#34D399', '#818CF8', '#FBBF24']
+            : ['#10B981', '#6366F1', '#F59E0B'];
+        winsChart.update();
+
+        savingsChart.options.scales = chartConfig.scales;
+        savingsChart.options.plugins.legend = chartConfig.plugins.legend;
+        savingsChart.data.datasets[0].borderColor = isDark ? '#818CF8' : '#6366F1';
+        savingsChart.data.datasets[0].backgroundColor = isDark
+            ? Chart.helpers.color('#818CF8').alpha(0.1).rgbString()
+            : Chart.helpers.color('#6366F1').alpha(0.1).rgbString();
+        savingsChart.update();
+
+        forecastChart.options.scales = chartConfig.scales;
+        forecastChart.options.plugins.legend = chartConfig.plugins.legend;
+        forecastChart.data.datasets.forEach(dataset => {
+            dataset.borderColor = isDark ? dataset.borderColor.replace('6366F1', '818CF8') : dataset.borderColor.replace('818CF8', '6366F1');
+            dataset.backgroundColor = isDark
+                ? Chart.helpers.color(dataset.borderColor).alpha(0.1).rgbString()
+                : Chart.helpers.color(dataset.borderColor).alpha(0.1).rgbString();
+        });
+        forecastChart.update();
+    }
+
+    // Toast notifications
+    const toastQueue = [];
+    let isToastShowing = false;
+
+    function showToast(message, type = 'success') {
+        toastQueue.push({message, type});
+
+        if (!isToastShowing) {
+            displayNextToast();
+        }
+    }
+
+    function displayNextToast() {
+        if (toastQueue.length === 0) {
+            isToastShowing = false;
+            return;
+        }
+
+        isToastShowing = true;
+        const {message, type} = toastQueue.shift();
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.style.display = 'block';
+        toast.style.background = type === 'success' ? 'var(--success)' : 'var(--danger)';
+        setTimeout(() => {
+            toast.style.display = 'none';
+            displayNextToast();
+        }, 2000);
+    }
+
+    // Chart initialization
+    const chartOptions = {
+        responsive: true,
+        animation: {duration: 750, easing: 'easeInOutQuart'},
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    padding: 20,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    font: {family: 'Inter', size: 12, weight: '500'}
+                }
             },
-            options: {
-                ...chartOptions,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { drawBorder: false, color: 'var(--chart-grid)', lineWidth: 0.5 },
-                        ticks: { color: 'var(--chart-text)', font: { family: 'Inter', size: 12 }, padding: 10 },
-                        title: { display: true, text: 'Number of Wins', color: 'var(--text)', font: { family: 'Inter', size: 12, weight: '500' }, padding: { bottom: 20 } }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: 'var(--chart-text)', font: { family: 'Inter', size: 12 } }
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleColor: '#ffffff',
+                bodyColor: '#ffffff',
+                borderColor: 'rgba(255, 255, 255, 0.2)',
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                titleFont: {family: 'Inter', size: 14, weight: '600'},
+                bodyFont: {family: 'Inter', size: 12},
+                displayColors: false,
+                callbacks: {
+                    label: function (context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (context.parsed.y !== null) {
+                            const value = context.parsed.y.toFixed(2);
+                            // Add % only for "Fee Forecast" datasets
+                            if (['Stripe', 'PayPal', 'Square'].includes(context.dataset.label)) {
+                                label += value + '%';
+                            } else {
+                                label += value;
+                            }
+                        }
+                        return label;
                     }
                 }
             }
-        });
+        }
+    };
 
-        const savingsChart = new Chart(document.getElementById('savingsChart'), {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Cumulative Savings ($)',
+    const winsChart = new Chart(document.getElementById('winsChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Stripe', 'PayPal', 'Square'],
+            datasets: [{
+                label: 'Gateway Wins',
+                data: [0, 0, 0],
+                backgroundColor: ['#10B981', '#6366F1', '#F59E0B'],
+                borderRadius: 12,
+                borderSkipped: false,
+                barThickness: 40
+            }]
+        },
+        options: {
+            ...chartOptions,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {drawBorder: false, color: 'var(--chart-grid)', lineWidth: 0.5},
+                    ticks: {color: 'var(--chart-text)', font: {family: 'Inter', size: 12}, padding: 10},
+                    title: {
+                        display: true,
+                        text: 'Number of Wins',
+                        color: 'var(--text)',
+                        font: {family: 'Inter', size: 12, weight: '500'},
+                        padding: {bottom: 20}
+                    }
+                },
+                x: {
+                    grid: {display: false},
+                    ticks: {color: 'var(--chart-text)', font: {family: 'Inter', size: 12}}
+                }
+            }
+        }
+    });
+
+    const savingsChart = new Chart(document.getElementById('savingsChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Cumulative Savings ($)',
+                data: [],
+                borderColor: '#6366F1',
+                backgroundColor: Chart.helpers.color('#6366F1').alpha(0.1).rgbString(),
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#6366F1',
+                pointBorderColor: '#FFFFFF',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderWidth: 3
+            }]
+        },
+        options: {
+            ...chartOptions,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {color: 'var(--chart-grid)', lineWidth: 0.5},
+                    ticks: {
+                        color: 'var(--chart-text)',
+                        font: {family: 'Inter', size: 12},
+                        padding: 10,
+                        callback: function (value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Total Savings ($)',
+                        color: 'var(--text)',
+                        font: {family: 'Inter', size: 12, weight: '500'},
+                        padding: {bottom: 20}
+                    }
+                },
+                x: {
+                    grid: {display: false},
+                    ticks: {color: 'var(--chart-text)', font: {family: 'Inter', size: 12}}
+                }
+            }
+        }
+    });
+
+    const forecastChart = new Chart(document.getElementById('forecastChart'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Stripe',
+                    data: [],
+                    borderColor: '#10B981',
+                    backgroundColor: Chart.helpers.color('#10B981').alpha(0.1).rgbString(),
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#10B981',
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 3
+                },
+                {
+                    label: 'PayPal',
                     data: [],
                     borderColor: '#6366F1',
                     backgroundColor: Chart.helpers.color('#6366F1').alpha(0.1).rgbString(),
@@ -576,295 +675,249 @@
                     pointRadius: 4,
                     pointHoverRadius: 6,
                     borderWidth: 3
-                }]
-            },
-            options: {
-                ...chartOptions,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'var(--chart-grid)', lineWidth: 0.5 },
-                        ticks: {
-                            color: 'var(--chart-text)',
-                            font: { family: 'Inter', size: 12 },
-                            padding: 10,
-                            callback: function(value) { return '$' + value.toFixed(2); }
-                        },
-                        title: { display: true, text: 'Total Savings ($)', color: 'var(--text)', font: { family: 'Inter', size: 12, weight: '500' }, padding: { bottom: 20 } }
+                },
+                {
+                    label: 'Square',
+                    data: [],
+                    borderColor: '#F59E0B',
+                    backgroundColor: Chart.helpers.color('#F59E0B').alpha(0.1).rgbString(),
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#F59E0B',
+                    pointBorderColor: '#FFFFFF',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 3
+                }
+            ]
+        },
+        options: {
+            ...chartOptions,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {color: 'var(--chart-grid)', lineWidth: 0.5},
+                    ticks: {
+                        color: 'var(--chart-text)',
+                        font: {family: 'Inter', size: 12},
+                        padding: 10,
+                        callback: function (value) {
+                            return value.toFixed(2) + '%';
+                        }
                     },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: 'var(--chart-text)', font: { family: 'Inter', size: 12 } }
+                    title: {
+                        display: true,
+                        text: 'Fee Rate (%)',
+                        color: 'var(--text)',
+                        font: {family: 'Inter', size: 12, weight: '500'},
+                        padding: {bottom: 20}
                     }
+                },
+                x: {
+                    grid: {display: false},
+                    ticks: {color: 'var(--chart-text)', font: {family: 'Inter', size: 12}}
                 }
             }
-        });
-
-        const forecastChart = new Chart(document.getElementById('forecastChart'), {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    {
-                        label: 'Stripe',
-                        data: [],
-                        borderColor: '#10B981',
-                        backgroundColor: Chart.helpers.color('#10B981').alpha(0.1).rgbString(),
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#10B981',
-                        pointBorderColor: '#FFFFFF',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 3
-                    },
-                    {
-                        label: 'PayPal',
-                        data: [],
-                        borderColor: '#6366F1',
-                        backgroundColor: Chart.helpers.color('#6366F1').alpha(0.1).rgbString(),
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#6366F1',
-                        pointBorderColor: '#FFFFFF',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 3
-                    },
-                    {
-                        label: 'Square',
-                        data: [],
-                        borderColor: '#F59E0B',
-                        backgroundColor: Chart.helpers.color('#F59E0B').alpha(0.1).rgbString(),
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#F59E0B',
-                        pointBorderColor: '#FFFFFF',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        borderWidth: 3
-                    }
-                ]
-            },
-            options: {
-                ...chartOptions,
-                scales: {
-                    y: {
-                        beginAtZero: false,
-                        grid: { color: 'var(--chart-grid)', lineWidth: 0.5 },
-                        ticks: {
-                            color: 'var(--chart-text)',
-                            font: { family: 'Inter', size: 12 },
-                            padding: 10,
-                            callback: function(value) { return value.toFixed(2) + '%'; }
-                        },
-                        title: { display: true, text: 'Fee Rate (%)', color: 'var(--text)', font: { family: 'Inter', size: 12, weight: '500' }, padding: { bottom: 20 } }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: 'var(--chart-text)', font: { family: 'Inter', size: 12 } }
-                    }
-                }
-            }
-        });
-
-        // Initialize theme
-        setTheme(isDarkMode);
-
-        // Theme toggle event listener
-        themeToggle.addEventListener('click', () => {
-            setTheme(!isDarkMode);
-        });
-
-        // Data state
-        let winsData = { Stripe: 0, PayPal: 0, Square: 0 };
-        let totalSavings = 0;
-        let transactionCount = 0;
-
-        // WebSocket connection
-        const ws = new WebSocket('ws://localhost:8000/ws');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const statusText = document.getElementById('statusText');
-
-        function updateConnectionStatus(connected) {
-            statusIndicator.classList.toggle('connected', connected);
-            statusText.textContent = connected ? 'Connected to gateway' : 'Disconnected from gateway';
         }
+    });
 
-        ws.onopen = () => {
-            updateConnectionStatus(true);
-            loadInitialData();
-            loadForecastData();
-        };
+    // Initialize theme
+    setTheme(isDarkMode);
 
-        ws.onclose = () => {
-            updateConnectionStatus(false);
-            showToast('Connection lost. Attempting to reconnect...', 'error');
-        };
+    // Theme toggle event listener
+    themeToggle.addEventListener('click', () => {
+        setTheme(!isDarkMode);
+    });
 
-        // Load forecast data
-        async function loadForecastData(period = '3month') {
-            try {
-                const response = await fetch(`http://localhost:8000/forecast?period=${period}`);
-                const data = await response.json();
+    // Data state
+    let winsData = {Stripe: 0, PayPal: 0, Square: 0};
+    let totalSavings = 0;
+    let transactionCount = 0;
 
-                forecastChart.data.labels = data.labels;
-                forecastChart.data.datasets[0].data = data.Stripe;
-                forecastChart.data.datasets[1].data = data.PayPal;
-                forecastChart.data.datasets[2].data = data.Square;
-                forecastChart.update('show');
+    // WebSocket connection
+    const ws = new WebSocket('ws://localhost:8000/ws');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
 
-                showToast('Fee forecast loaded successfully');
-            } catch (error) {
-                console.error('Error loading forecast data:', error);
-                showToast('Failed to load fee forecast', 'error');
-            }
+    function updateConnectionStatus(connected) {
+        statusIndicator.classList.toggle('connected', connected);
+        statusText.textContent = connected ? 'Connected to gateway' : 'Disconnected from gateway';
+    }
+
+    ws.onopen = () => {
+        updateConnectionStatus(true);
+        loadInitialData();
+        loadForecastData();
+    };
+
+    ws.onclose = () => {
+        updateConnectionStatus(false);
+        showToast('Connection lost. Attempting to reconnect...', 'error');
+    };
+
+    // Load forecast data
+    async function loadForecastData(period = '3month') {
+        try {
+            const response = await fetch(`http://localhost:8000/forecast?period=${period}`);
+            const data = await response.json();
+
+            forecastChart.data.labels = data.labels;
+            forecastChart.data.datasets[0].data = data.Stripe;
+            forecastChart.data.datasets[1].data = data.PayPal;
+            forecastChart.data.datasets[2].data = data.Square;
+            forecastChart.update('show');
+
+            showToast('Fee forecast loaded successfully');
+        } catch (error) {
+            console.error('Error loading forecast data:', error);
+            showToast('Failed to load fee forecast', 'error');
         }
+    }
 
-        // Forecast period dropdown
-        document.getElementById('forecastPeriod').addEventListener('change', (event) => {
-            loadForecastData(event.target.value);
-        });
+    // Forecast period dropdown
+    document.getElementById('forecastPeriod').addEventListener('change', (event) => {
+        loadForecastData(event.target.value);
+    });
 
-        // Data handling
-        async function loadInitialData() {
-            try {
-                const response = await fetch('http://localhost:8000/dashboard-data');
-                const data = await response.json();
+    // Data handling
+    async function loadInitialData() {
+        try {
+            const response = await fetch('http://localhost:8000/dashboard-data');
+            const data = await response.json();
 
-                winsData = {
-                    Stripe: data.summary['Stripe Wins'] || 0,
-                    PayPal: data.summary['PayPal Wins'] || 0,
-                    Square: data.summary['Square Wins'] || 0
-                };
-                totalSavings = data.transactions?.reduce((sum, tx) => sum + (tx.savings || 0), 0) || 0;
-                transactionCount = data.transactions?.length || 0;
-
-                savingsChart.data.labels = data.transactions?.map(tx => `T${tx.transaction}`) || [];
-                savingsChart.data.datasets[0].data = data.transactions?.reduce((acc, tx) => {
-                    const last = acc.length ? acc[acc.length - 1] : 0;
-                    acc.push(last + (tx.savings || 0));
-                    return acc;
-                }, []) || [];
-
-                updateCharts();
-                updateSummaryCards();
-                showToast('Dashboard data loaded successfully');
-            } catch (error) {
-                console.error('Error loading initial data:', error);
-                showToast('Failed to load initial data', 'error');
-            }
-        }
-
-        function updateCharts() {
-            winsChart.data.datasets[0].data = [
-                winsData.Stripe,
-                winsData.PayPal,
-                winsData.Square
-            ];
-            winsChart.update('show');
-
-            if (savingsChart.data.labels.length > 20) {
-                savingsChart.data.labels.shift();
-                savingsChart.data.datasets[0].data.shift();
-            }
-            savingsChart.update('show');
-        }
-
-        function updateSummaryCards() {
-            document.getElementById('totalTransactions').textContent = transactionCount;
-            document.getElementById('totalSavings').textContent = formatCurrency(totalSavings);
-
-            const bestPerformer = Object.entries(winsData).reduce((a, b) =>
-                b[1] > a[1] ? b : a, ['None', 0])[0];
-            const bestPerformerElement = document.getElementById('bestPerformer');
-            bestPerformerElement.textContent = bestPerformer;
-            bestPerformerElement.parentElement.classList.toggle('best-performer', bestPerformer !== 'None');
-        }
-
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(amount);
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-
-                if (data.reset) {
-                    winsData = { Stripe: 0, PayPal: 0, Square: 0 };
-                    totalSavings = 0;
-                    transactionCount = 0;
-                    savingsChart.data.labels = [];
-                    savingsChart.data.datasets[0].data = [];
-                    showToast('Dashboard reset complete');
-                } else if (data.winner && data.savings !== undefined) {
-                    const normalizedWinner = data.winner.charAt(0).toUpperCase() + data.winner.slice(1).toLowerCase();
-                    const winner = normalizedWinner === "Paypal" ? "PayPal" : normalizedWinner;
-                    if (winsData.hasOwnProperty(winner)) {
-                        winsData[winner]++;
-                        totalSavings += data.savings;
-                        transactionCount++;
-
-                        savingsChart.data.labels.push(`T${transactionCount}`);
-                        savingsChart.data.datasets[0].data.push(totalSavings);
-
-                        showToast(`New transaction: ${winner} won! Saved ${formatCurrency(data.savings)}`);
-                    } else {
-                        console.error("Unknown winner:", winner);
-                    }
-                }
-
-                updateCharts();
-                updateSummaryCards();
-            } catch (error) {
-                console.error('Error processing WebSocket message:', error);
-                showToast('Error processing update', 'error');
-            }
-        };
-
-        document.getElementById('downloadBtn').addEventListener('click', () => {
-            const report = {
-                timestamp: new Date().toISOString(),
-                totalTransactions: transactionCount,
-                totalSavings,
-                gatewayWins: winsData,
-                savingsHistory: savingsChart.data.datasets[0].data,
-                forecast: {
-                    labels: forecastChart.data.labels,
-                    Stripe: forecastChart.data.datasets[0].data,
-                    PayPal: forecastChart.data.datasets[1].data,
-                    Square: forecastChart.data.datasets[2].data
-                }
+            winsData = {
+                Stripe: data.summary['Stripe Wins'] || 0,
+                PayPal: data.summary['PayPal Wins'] || 0,
+                Square: data.summary['Square Wins'] || 0
             };
+            totalSavings = data.transactions?.reduce((sum, tx) => sum + (tx.savings || 0), 0) || 0;
+            transactionCount = data.transactions?.length || 0;
 
-            const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `quantumpay-report-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            savingsChart.data.labels = data.transactions?.map(tx => `T${tx.transaction}`) || [];
+            savingsChart.data.datasets[0].data = data.transactions?.reduce((acc, tx) => {
+                const last = acc.length ? acc[acc.length - 1] : 0;
+                acc.push(last + (tx.savings || 0));
+                return acc;
+            }, []) || [];
 
-            showToast('Report downloaded successfully');
-        });
+            updateCharts();
+            updateSummaryCards();
+            showToast('Dashboard data loaded successfully');
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+            showToast('Failed to load initial data', 'error');
+        }
+    }
 
-        document.getElementById('resetBtn').addEventListener('click', () => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'reset' }));
-            } else {
-                showToast('Cannot reset: WebSocket disconnected', 'error');
+    function updateCharts() {
+        winsChart.data.datasets[0].data = [
+            winsData.Stripe,
+            winsData.PayPal,
+            winsData.Square
+        ];
+        winsChart.update('show');
+
+        if (savingsChart.data.labels.length > 20) {
+            savingsChart.data.labels.shift();
+            savingsChart.data.datasets[0].data.shift();
+        }
+        savingsChart.update('show');
+    }
+
+    function updateSummaryCards() {
+        document.getElementById('totalTransactions').textContent = transactionCount;
+        document.getElementById('totalSavings').textContent = formatCurrency(totalSavings);
+
+        const bestPerformer = Object.entries(winsData).reduce((a, b) =>
+            b[1] > a[1] ? b : a, ['None', 0])[0];
+        const bestPerformerElement = document.getElementById('bestPerformer');
+        bestPerformerElement.textContent = bestPerformer;
+        bestPerformerElement.parentElement.classList.toggle('best-performer', bestPerformer !== 'None');
+    }
+
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    }
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+
+            if (data.reset) {
+                winsData = {Stripe: 0, PayPal: 0, Square: 0};
+                totalSavings = 0;
+                transactionCount = 0;
+                savingsChart.data.labels = [];
+                savingsChart.data.datasets[0].data = [];
+                showToast('Dashboard reset complete');
+            } else if (data.winner && data.savings !== undefined) {
+                const normalizedWinner = data.winner.charAt(0).toUpperCase() + data.winner.slice(1).toLowerCase();
+                const winner = normalizedWinner === "Paypal" ? "PayPal" : normalizedWinner;
+                if (winsData.hasOwnProperty(winner)) {
+                    winsData[winner]++;
+                    totalSavings += data.savings;
+                    transactionCount++;
+
+                    savingsChart.data.labels.push(`T${transactionCount}`);
+                    savingsChart.data.datasets[0].data.push(totalSavings);
+
+                    showToast(`New transaction: ${winner} won! Saved ${formatCurrency(data.savings)}`);
+                } else {
+                    console.error("Unknown winner:", winner);
+                }
             }
-        });
-    </script>
+
+            setTimeout(() => {
+                updateCharts();
+                updateSummaryCards();
+            }, 0);
+        } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+            showToast('Error processing update', 'error');
+        }
+    };
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+        const report = {
+            timestamp: new Date().toISOString(),
+            totalTransactions: transactionCount,
+            totalSavings,
+            gatewayWins: winsData,
+            savingsHistory: savingsChart.data.datasets[0].data,
+            forecast: {
+                labels: forecastChart.data.labels,
+                Stripe: forecastChart.data.datasets[0].data,
+                PayPal: forecastChart.data.datasets[1].data,
+                Square: forecastChart.data.datasets[2].data
+            }
+        };
+
+        const blob = new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `quantumpay-report-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Report downloaded successfully');
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({type: 'reset'}));
+        } else {
+            showToast('Cannot reset: WebSocket disconnected', 'error');
+        }
+    });
+</script>
 </body>
 </html>
