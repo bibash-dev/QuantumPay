@@ -212,6 +212,22 @@
             -webkit-text-fill-color: var(--success);
         }
 
+        .card ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .card ul li {
+            margin: 0.25rem 0;
+        }
+
+        .card ul li strong {
+            color: var(--text);
+        }
+
         .charts-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
@@ -403,6 +419,15 @@
             <div class="card-title">Best Performer</div>
             <div class="card-value" id="bestPerformer">-</div>
         </div>
+        <div class="card">
+            <div class="card-title">Savings by Gateway</div>
+            <ul id="savingsByGateway">
+                <li>Stripe: $0.00</li>
+                <li>PayPal: $0.00</li>
+                <li>Square: $0.00</li>
+                <li><strong>Total: $0.00</strong></li>
+            </ul>
+        </div>
     </div>
 
     <div class="charts-container">
@@ -411,6 +436,9 @@
         </div>
         <div class="chart-wrapper">
             <canvas id="savingsChart"></canvas>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="gatewaySavingsChart"></canvas>
         </div>
         <div class="chart-wrapper">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -468,6 +496,13 @@
             ? Chart.helpers.color('#818CF8').alpha(0.1).rgbString()
             : Chart.helpers.color('#6366F1').alpha(0.1).rgbString();
         savingsChart.update();
+
+        gatewaySavingsChart.options.scales = chartConfig.scales;
+        gatewaySavingsChart.options.plugins.legend = chartConfig.plugins.legend;
+        gatewaySavingsChart.data.datasets[0].backgroundColor = isDark
+            ? ['#34D399', '#818CF8', '#FBBF24']
+            : ['#10B981', '#6366F1', '#F59E0B'];
+        gatewaySavingsChart.update();
 
         forecastChart.options.scales = chartConfig.scales;
         forecastChart.options.plugins.legend = chartConfig.plugins.legend;
@@ -548,7 +583,7 @@
                             if (['Stripe', 'PayPal', 'Square'].includes(context.dataset.label)) {
                                 label += value + '%';
                             } else {
-                                label += value;
+                                label += '$' + value;
                             }
                         }
                         return label;
@@ -630,6 +665,55 @@
                     title: {
                         display: true,
                         text: 'Total Savings ($)',
+                        color: 'var(--text)',
+                        font: {family: 'Inter', size: 12, weight: '500'},
+                        padding: {bottom: 20}
+                    }
+                },
+                x: {
+                    grid: {display: false},
+                    ticks: {color: 'var(--chart-text)', font: {family: 'Inter', size: 12}}
+                }
+            }
+        }
+    });
+
+    const gatewaySavingsChart = new Chart(document.getElementById('gatewaySavingsChart'), {
+        type: 'line',
+        data: {
+            labels: ['Stripe', 'PayPal', 'Square'],
+            datasets: [{
+                label: 'Savings by Gateway ($)',
+                data: [0, 0, 0],
+                borderColor: '#6366F1',
+                backgroundColor: Chart.helpers.color('#6366F1').alpha(0.1).rgbString(),
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: ['#10B981', '#6366F1', '#F59E0B'], // Per-point colors
+                pointBorderColor: '#FFFFFF',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderWidth: 3
+            }]
+        },
+        options: {
+            ...chartOptions,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {color: 'var(--chart-grid)', lineWidth: 0.5},
+                    ticks: {
+                        color: 'var(--chart-text)',
+                        font: {family: 'Inter', size: 12},
+                        padding: 10,
+                        callback: function (value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Savings ($)',
                         color: 'var(--text)',
                         font: {family: 'Inter', size: 12, weight: '500'},
                         padding: {bottom: 20}
@@ -732,6 +816,7 @@
 
     // Data state
     let winsData = {Stripe: 0, PayPal: 0, Square: 0};
+    let savingsByGateway = {Stripe: 0, PayPal: 0, Square: 0}; // Track savings per gateway
     let totalSavings = 0;
     let transactionCount = 0;
 
@@ -794,6 +879,13 @@
             totalSavings = data.transactions?.reduce((sum, tx) => sum + (tx.savings || 0), 0) || 0;
             transactionCount = data.transactions?.length || 0;
 
+            // Initialize savingsByGateway from the response
+            savingsByGateway = {
+                Stripe: data.summary['Savings by Gateway']?.Stripe || 0,
+                PayPal: data.summary['Savings by Gateway']?.PayPal || 0,
+                Square: data.summary['Savings by Gateway']?.Square || 0
+            };
+
             savingsChart.data.labels = data.transactions?.map(tx => `T${tx.transaction}`) || [];
             savingsChart.data.datasets[0].data = data.transactions?.reduce((acc, tx) => {
                 const last = acc.length ? acc[acc.length - 1] : 0;
@@ -818,6 +910,13 @@
         ];
         winsChart.update('show');
 
+        gatewaySavingsChart.data.datasets[0].data = [
+            savingsByGateway.Stripe,
+            savingsByGateway.PayPal,
+            savingsByGateway.Square
+        ];
+        gatewaySavingsChart.update('show');
+
         if (savingsChart.data.labels.length > 20) {
             savingsChart.data.labels.shift();
             savingsChart.data.datasets[0].data.shift();
@@ -834,6 +933,15 @@
         const bestPerformerElement = document.getElementById('bestPerformer');
         bestPerformerElement.textContent = bestPerformer;
         bestPerformerElement.parentElement.classList.toggle('best-performer', bestPerformer !== 'None');
+
+        // Update Savings by Gateway card
+        const savingsList = document.getElementById('savingsByGateway');
+        savingsList.innerHTML = `
+            <li>Stripe: ${formatCurrency(savingsByGateway.Stripe)}</li>
+            <li>PayPal: ${formatCurrency(savingsByGateway.PayPal)}</li>
+            <li>Square: ${formatCurrency(savingsByGateway.Square)}</li>
+            <li><strong>Total: ${formatCurrency(totalSavings)}</strong></li>
+        `;
     }
 
     function formatCurrency(amount) {
@@ -849,12 +957,21 @@
         try {
             const data = JSON.parse(event.data);
 
-            if (data.winner && data.savings !== undefined) {
+            if (data.reset) {
+                winsData = {Stripe: 0, PayPal: 0, Square: 0};
+                savingsByGateway = {Stripe: 0, PayPal: 0, Square: 0};
+                totalSavings = 0;
+                transactionCount = 0;
+                savingsChart.data.labels = [];
+                savingsChart.data.datasets[0].data = [];
+                showToast('Dashboard reset complete');
+            } else if (data.winner && data.savings !== undefined) {
                 const normalizedWinner = data.winner.charAt(0).toUpperCase() + data.winner.slice(1).toLowerCase();
                 const winner = normalizedWinner === "Paypal" ? "PayPal" : normalizedWinner;
                 if (winsData.hasOwnProperty(winner)) {
                     winsData[winner]++;
                     totalSavings += data.savings;
+                    savingsByGateway[winner] += data.savings; // Accumulate savings for the winner
                     transactionCount++;
 
                     savingsChart.data.labels.push(`T${transactionCount}`);
@@ -876,12 +993,33 @@
         }
     };
 
+    document.getElementById('simulateBtn').addEventListener('click', async () => {
+        try {
+            document.getElementById('simulateBtn').disabled = true;
+            const response = await fetch('http://localhost:8000/charge', {
+                method: 'GET',
+                headers: {'Content-Type': 'application/json'}
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to simulate transactions: ${errorText}`);
+            }
+            showToast('Started simulation: 20 transactions');
+        } catch (error) {
+            console.error('Error simulating transactions:', error);
+            showToast(`Simulation failed: ${error.message}`, 'error');
+        } finally {
+            document.getElementById('simulateBtn').disabled = false;
+        }
+    });
+
     document.getElementById('downloadBtn').addEventListener('click', () => {
         const report = {
             timestamp: new Date().toISOString(),
             totalTransactions: transactionCount,
             totalSavings,
             gatewayWins: winsData,
+            savingsByGateway, // Include savings by gateway in the report
             savingsHistory: savingsChart.data.datasets[0].data,
             forecast: {
                 labels: forecastChart.data.labels,
