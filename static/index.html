@@ -388,6 +388,10 @@
                 <span class="theme-icon">🌞</span>
                 <span>Theme</span>
             </button>
+            <button class="btn" id="simulateBtn">
+                <span>▶</span>
+                <span>Simulate</span>
+            </button>
             <button class="btn" id="resetBtn">
                 <span>↺</span>
                 <span>Reset</span>
@@ -821,7 +825,8 @@
     let transactionCount = 0;
 
     // WebSocket connection
-    const ws = new WebSocket('ws://localhost:8000/ws');
+    const wsUrl = `ws://${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
     const statusIndicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
 
@@ -844,7 +849,7 @@
     // Load forecast data
     async function loadForecastData(period = '3month') {
         try {
-            const response = await fetch(`http://localhost:8000/forecast?period=${period}`);
+            const response = await fetch(`/forecast?period=${period}`);
             const data = await response.json();
 
             forecastChart.data.labels = data.labels;
@@ -868,7 +873,7 @@
     // Data handling
     async function loadInitialData() {
         try {
-            const response = await fetch('http://localhost:8000/dashboard-data');
+            const response = await fetch('/dashboard-data');
             const data = await response.json();
 
             winsData = {
@@ -996,7 +1001,7 @@
     document.getElementById('simulateBtn').addEventListener('click', async () => {
         try {
             document.getElementById('simulateBtn').disabled = true;
-            const response = await fetch('http://localhost:8000/charge', {
+            const response = await fetch('/charge', {
                 method: 'GET',
                 headers: {'Content-Type': 'application/json'}
             });
