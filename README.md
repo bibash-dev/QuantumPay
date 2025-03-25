@@ -30,7 +30,7 @@ Businesses face challenges such as high transaction fees, inconsistent gateway p
 
 ## Why Build QuantumPay?
 
-Our mission is to bring quantum computing to fintech, solving optimization problems beyond the reach of traditional methods. QuantumPay was created to provide:
+The mission is to bring quantum computing to fintech, solving optimization problems beyond the reach of traditional methods. QuantumPay was created to provide:
 1. **Empowerment for SMEs**: Affordable tools to reduce operational costs.
 2. **Innovation in Fintech**: A demonstration of real-world quantum computing applications.
 
